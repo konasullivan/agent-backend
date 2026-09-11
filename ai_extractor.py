@@ -1,5 +1,5 @@
 """
-Two jobs for Claude here:
+Two jobs for Gemini here:
 1. extract() -- turn one raw chat message into a structured row
    (category, a short note, action items, deadline).
 2. build_summary() -- turn a batch of already-logged rows into a
@@ -8,23 +8,26 @@ Two jobs for Claude here:
 import json
 from datetime import datetime, timezone
 
-from anthropic import Anthropic
+from google import genai
+from google.genai import types
 
 import config
 
-client = Anthropic(api_key=config.ANTHROPIC_API_KEY)
+client = genai.Client(api_key=config.GEMINI_API_KEY)
+
+MODEL = "gemini-3.7-flash"
 
 EXTRACT_SYSTEM_PROMPT = """You extract structured data from a single message \
 in a company's internal group chat, for a records/action-item log. \
 Respond ONLY with a JSON object, no prose, no markdown fences, matching \
 exactly this shape:
 
-{
-  "category": string,        // short 1-3 word topic label, e.g. "Fundraiser", "Trading Project", "Research Project", "Miscellaneous" -- reuse an existing-sounding label when the topic matches something recurring, otherwise invent a short sensible one
+{{
+  "category": string,        // short 1-3 word topic label, e.g. "Fundraiser", "Trading Project", "Research Project", "Customer Service", "Miscellaneous" -- reuse an existing-sounding label when the topic matches something recurring, otherwise invent a short sensible one
   "notes": string,           // a short (under 8 words) human-readable note/reminder if this message is worth flagging, else ""
   "action_items": [string],  // concrete follow-up tasks mentioned, can be empty
   "deadline": string or null // ISO date (YYYY-MM-DD) if a deadline/date is mentioned, else null
-}
+}}
 
 Today's date is {today} -- resolve relative dates ("next Friday", "in 3 days") \
 against it. If the message is pure small talk with nothing worth logging, \
@@ -45,14 +48,16 @@ code fences, no JSON.
 """
 
 
-def _call_claude(system: str, user_content: str, max_tokens: int = 500) -> str:
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user_content}],
+def _call_gemini(system: str, user_content: str, max_output_tokens: int = 500) -> str:
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=user_content,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=max_output_tokens,
+        ),
     )
-    return "".join(b.text for b in response.content if b.type == "text").strip()
+    return (response.text or "").strip()
 
 
 def extract(message_text: str, author: str) -> dict:
@@ -62,7 +67,7 @@ def extract(message_text: str, author: str) -> dict:
         allowed = ", ".join(config.CATEGORIES)
         system += f'\nThe "category" value MUST be exactly one of: {allowed}.'
 
-    text = _call_claude(system, f"Message from {author}: {message_text}")
+    text = _call_gemini(system, f"Message from {author}: {message_text}")
     text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
@@ -82,8 +87,8 @@ def build_summary(records: list[dict], label: str) -> str:
         return f"Nothing logged for {label} yet."
 
     payload = json.dumps(records, indent=2, default=str)
-    return _call_claude(
+    return _call_gemini(
         SUMMARY_SYSTEM_PROMPT.format(label=label),
         payload,
-        max_tokens=800,
+        max_output_tokens=800,
     )
