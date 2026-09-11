@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Business Chat Record</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; background: #f6f7f9; margin: 0; padding: 2rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  th, td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid #eee; font-size: 0.9rem; vertical-align: top; }
+  th { background: #fafafa; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.78rem; background: #eef0ff; color: #3a3aa0; }
+  .deadline { color: #b8590a; font-weight: 600; }
+  a.link { color: #4f6df5; text-decoration: none; }
+</style>
+</head>
+<body>
+  <h1>Business Chat Record</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Message</th>
+        <th>Category</th>
+        <th>Staff Member</th>
+        <th>Subteam</th>
+        <th>Date</th>
+        <th>Notes</th>
+        <th>Deadline</th>
+        <th>Link</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td>{{ r["Message"] }}</td>
+        <td><span class="pill">{{ r["Category"] }}</span></td>
+        <td>{{ r["Staff Member"] }}</td>
+        <td>{{ r["Subteam"] }}</td>
+        <td>{{ r["Date"] }}</td>
+        <td>{{ r["Notes"] }}</td>
+        <td>{% if r["Deadline"] %}<span class="deadline">{{ r["Deadline"] }}</span>{% endif %}</td>
+        <td>{% if r["Link"] %}<a class="link" href="{{ r['Link'] }}" target="_blank">Open</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
