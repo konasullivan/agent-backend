@@ -14,6 +14,7 @@ import discord
 
 import config
 from ai_extractor import extract, build_summary
+from conversation_tracker import get_or_create_conversation
 from sheets_service import append_record, get_records_in_range
 from calendar_service import create_event
 from time_utils import is_summary_request, parse_time_range
@@ -40,13 +41,17 @@ async def on_message(message: discord.Message):
 
     author_name = str(message.author)
     data = extract(message.content, author_name)
+    msg_time = message.created_at.astimezone(timezone.utc)
+    conversation_id, conversation_topic = get_or_create_conversation(message.content, msg_time)
 
     record = {
         "Message": message.content,
         "Category": data.get("category", "Miscellaneous"),
+        "Conversation ID": conversation_id,
+        "Conversation Topic": conversation_topic,
         "Staff Member": author_name,
         "Subteam": config.get_subteam(author_name),
-        "Date": message.created_at.astimezone(timezone.utc).isoformat(),
+        "Date": msg_time.isoformat(),
         "Notes": data.get("notes", ""),
         "Action Items": "; ".join(data.get("action_items", [])),
         "Deadline": data.get("deadline") or "",
