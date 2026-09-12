@@ -5,6 +5,12 @@ Milestone M5: Final Test Pass, Hardening & Documentation (Completed)
 
 ## Feature & Architecture Log
 
+### 2026-09-12
++++ Added: Standalone Qdrant Vector Database via Docker Compose (`docker-compose.yml`) exposing REST API (6333) and native visual dashboard (`http://localhost:6333/dashboard`) with persistent storage mapped to `./data/qdrant_storage`.
++++ Added: Vector persistence engine in `conversation_tracker.py` using `qdrant-client` to index conversation embeddings with cosine similarity and sliding time window filters, featuring resilient automatic fallback to in-memory dictionary if Qdrant is unavailable.
++++ Added: Operational lifecycle orchestration scripts `run.sh` and `stop.sh` with PID management in `.run/`, container healthcheck polling, background process launching, graceful SIGTERM/SIGKILL signal handling, and clean shutdown.
++++ Added: Comprehensive vector tracker test suite in `tests/test_qdrant_tracker.py` covering collection creation, vector similarity threshold matching, time-based purging, and fault injection fallback, bringing the test suite to 315 passing tests.
+
 ### 2026-09-11
 +++ Added: Comprehensive project memory in `docs/MEMORY.md` capturing core architecture, FastMCP dual transport (`inproc` and `stdio`), Slack Socket Mode, service decoupling, and critical engineering lessons learned (git index untracking vs disk deletion, strict stderr logging for MCP JSON-RPC, token prefix validation, timezone awareness harmonization, empty row append protection, and thread pool sync execution).
 +++ Added: Long-term architectural roadmap and system specifications in `docs/LONG_TERM_PLAN.md` detailing system vision, ASCII component architecture, component ownership, completed milestones (M1–M5), future enhancement tracks, and strict schema contracts.

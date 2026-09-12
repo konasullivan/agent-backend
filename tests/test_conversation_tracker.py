@@ -17,9 +17,10 @@ from conversation_tracker import (
 
 
 @pytest.fixture(autouse=True)
-def clear_active_conversations():
-    """Ensure in-memory conversation state is reset between test executions."""
+def clear_active_conversations(monkeypatch):
+    """Ensure in-memory conversation state is reset and Qdrant is disabled for in-memory tests."""
     _active_conversations.clear()
+    monkeypatch.setattr("conversation_tracker.get_qdrant_client", lambda: None)
     yield
     _active_conversations.clear()
 

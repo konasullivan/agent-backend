@@ -13,6 +13,11 @@ GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
 
+# Qdrant Vector Search
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "conversations")
+
 # Column order in the Google Sheet -- mirrors the "Business Chat Record" table.
 # "Action Items" and "Deadline" aren't in the reference table but are kept as
 # extra columns so the bot can build summaries and calendar events without

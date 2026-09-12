@@ -31,6 +31,17 @@
   - Exposes console entrypoints `main` and `agent-backend` mapping to `main:cli`.
   - Maintains `requirements.txt` strictly in sync with `pyproject.toml` for partner and container deployment compatibility.
 
+- **Qdrant Vector Database & Semantic Persistence**:
+  - Standalone Qdrant container managed via `docker-compose.yml` (`qdrant/qdrant:latest`).
+  - Stores conversation topic embeddings with cosine similarity distance metric in collection `conversations`.
+  - Native Web UI available out of the box at `http://localhost:6333/dashboard` for live vector inspection.
+  - Resilient design: `conversation_tracker.py` connects with timeout protection and automatically falls back to in-memory cosine clustering if Qdrant or Docker is offline.
+
+- **Process Lifecycle & PID Management (`run.sh` & `stop.sh`)**:
+  - `run.sh` launches Docker Qdrant, polls `http://localhost:6333/healthz` until healthy, and starts background FastAPI dashboard and Slack bot processes.
+  - Active process IDs are written to `.run/dashboard.pid` and `.run/slack_bot.pid` (`.run/` is gitignored).
+  - `stop.sh` reads active PIDs, sends `SIGTERM` (with 5-second `SIGKILL` escalation), purges PID files, and cleanly pauses the Qdrant container with `docker compose stop`.
+
 ---
 
 ## Target Resources & Configuration Reference
