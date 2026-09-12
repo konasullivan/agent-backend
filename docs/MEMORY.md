@@ -37,10 +37,26 @@
   - Native Web UI available out of the box at `http://localhost:6333/dashboard` for live vector inspection.
   - Resilient design: `conversation_tracker.py` connects with timeout protection and automatically falls back to in-memory cosine clustering if Qdrant or Docker is offline.
 
+- **Context-Aware Conversational Ingestion (Past 24 Hours)**:
+  - Unthreaded channel messages often reference prior conversation state (e.g. proposing lunch tomorrow, followed by "ofc, how about 7pm at Becker Dining Hall?", then "wait, but i think 8pm is better for me").
+  - `slack_bot.py` fetches preceding messages in the channel from the past 24 hours (`_get_recent_channel_context`) and provides them as structured chronological context to `ai_extractor.extract(context_messages=...)`.
+  - Gemini parses relative date/time expressions relative to UTC timestamps, extracts full ISO datetimes (`YYYY-MM-DDTHH:MM:SS`), meeting locations, and contextual topics without requiring users to reply in explicit Slack threads.
+
+- **Calendar Event Link Propagation & Timezone Handling**:
+  - Naive datetimes are localized via `ZoneInfo` using `config.TIMEZONE` (default `America/New_York`), producing standard ISO timestamps with local offsets (e.g. `2026-09-29T19:00:00-04:00`). This ensures events scheduled at 7:00 PM local appear at 7:00 PM EDT on Google Calendar rather than being shifted to 3:00 PM EDT.
+  - When an event is scheduled via `calendar_service.create_event`, the generated Google Calendar event URL (`https://www.google.com/calendar/event?eid=...`) is propagated back to Google Sheets column K (`Link`) via `sheets_service.update_record_link`.
+  - The web dashboard detects calendar links and renders a styled `Open Event 📅` action button (`.link-event`), while retaining `Open in Slack ↗` for standard message permalinks.
+
+- **Conversational Incomplete & Superseded Event Pruning**:
+  - When follow-up messages provide richer detail (e.g. specifying "at texas roadhouse" after "lets get dinner on the 29th at 7") or reschedule a time (e.g. "wait, but i think 8pm is better for me"):
+  - `slack_bot.py` tracks active event IDs per conversation (`_active_events`) and invokes `calendar_service.prune_superseded_events()` and `calendar_service.delete_event()` via the FastMCP tool `calendar_delete_event`.
+  - Prior incomplete events without location or with outdated summaries are automatically deleted from Google Calendar, preventing duplicate/stale events.
+
+
 - **Process Lifecycle & PID Management (`run.sh` & `stop.sh`)**:
   - `run.sh` launches Docker Qdrant, polls `http://localhost:6333/healthz` until healthy, and starts background FastAPI dashboard and Slack bot processes.
   - Active process IDs are written to `.run/dashboard.pid` and `.run/slack_bot.pid` (`.run/` is gitignored).
-  - `stop.sh` reads active PIDs, sends `SIGTERM` (with 5-second `SIGKILL` escalation), purges PID files, and cleanly pauses the Qdrant container with `docker compose stop`.
+  - `stop.sh` reads active PIDs, sends `SIGTERM` (with 5-second `SIGKILL` escalation), sweeps orphan background worker processes (`main.py --listen-slack`, `uvicorn`), and cleanly pauses the Qdrant container with `docker compose stop`.
 
 ---
 
@@ -120,6 +136,19 @@
 7. **Null Safety & Row Normalization in Dashboard**:
    - When external Google Sheets contain empty cells or missing header columns, naive access raises `KeyError` or causes `TypeError` in templating engines.
    - Normalizing row dictionaries with default empty strings (`record.get(header, "")`) ensures robust table rendering across any ragged sheet structure.
+
+8. **Worksheet Tab Isolation vs Reusing Legacy Tabs**:
+   - Reusing pre-existing tabs (e.g. `Sheet1`) from older implementations can lead to severe column shift errors when the old row 1 headers have fewer columns (e.g. 7 columns) than the active application schema (11 columns).
+   - Creating a dedicated, isolated tab (e.g. `ChatRecords`) initialized with the full canonical headers prevents data truncation and column misalignment without corrupting legacy data.
+
+9. **Strict URL Scheme Validation in Jinja2 Dashboard**:
+   - Trusting string contents of cell values (such as rendering `<a href="{{ r['Link'] }}">`) can cause broken navigation if the cell contains non-URL values like ISO timestamps or empty strings.
+   - Always validate that URLs start with approved schemes (`http://`, `https://`, `slack://`) before rendering clickable anchors; otherwise fall back to empty or placeholder `-`.
+
+10. **Slack User Name Resolution & `users:read` Scope**:
+    - Slack Socket Mode message events only contain `user` ID (`U...`).
+    - `client.users_info` requires the `users:read` Bot Token Scope. Without it, Slack returns `missing_scope`.
+    - Combining cached `users.info` lookups with `user_id` fallback in `config.get_subteam(author_name, user_id=user_id)` ensures reliable author and subteam attribution.
 
 ---
 

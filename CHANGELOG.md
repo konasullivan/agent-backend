@@ -1,9 +1,32 @@
 # Changelog
 
 ## Current Focus
-Milestone M5: Final Test Pass, Hardening & Documentation (Completed)
+Milestone M8: Local Timezone Alignment & Conversational Event Pruning (Completed)
 
 ## Feature & Architecture Log
+
+### 2026-09-12 (Milestone M8: Local Timezone Alignment & Conversational Event Pruning)
++++ Added: Timezone localization to `America/New_York` across `config.py`, `calendar_service.py` (`_normalize_date_range`), and `ai_extractor.py`, resolving the UTC offset shift where 7:00 PM EDT events were incorrectly scheduled at 3:00 PM.
++++ Added: FastMCP `calendar_delete_event` tool in `src/mcp_server/server.py` and `GoogleWorkspaceService.delete_event` in `src/services/google_services.py` with graceful 404/410 handling.
++++ Added: Automated incomplete and superseded event pruning in `calendar_service.py` (`prune_superseded_events`) and `slack_bot.py` (`_active_events` tracking and deletion upon follow-up message enrichment like adding a venue).
++++ Added: Google Calendar event ID extraction helper `extract_event_id_from_link` in `calendar_service.py` decoding base64 `eid` parameters.
++++ Added: Comprehensive unit tests in `tests/test_calendar_service.py`, `tests/test_mcp_server.py`, and `tests/test_slack_bot.py`, expanding the test suite to 322 passing tests.
+
+### 2026-09-12 (Milestone M7: 24h Context Ingestion & Event Link Backpropagation)
++++ Added: Preceding 24-hour channel message history context retrieval in `slack_bot.py` (`_get_recent_channel_context`), allowing unthreaded conversational continuity (e.g. meal rescheduling) without forcing users into Slack threads.
++++ Added: Extended Gemini extraction in `ai_extractor.py` to ingest `context_messages`, resolving relative dates/times against UTC timestamps into ISO 8601 datetimes (`YYYY-MM-DDTHH:MM:SS`) and extracting meeting locations.
++++ Added: Calendar event link backpropagation: upon event creation, `slack_bot.py` calls `sheets_service.update_record_link` using `sheets_update_range` MCP tool to update Column K with the direct Google Calendar URL (`https://www.google.com/calendar/event?eid=...`).
++++ Added: Dashboard UI badge rendering for Google Calendar links displaying `Open Event 📅` with `.link-event` styling, distinguishing them from Slack message permalinks.
++++ Added: Orphan process sweep in `stop.sh` terminating untracked background Python instances (`main.py --listen-slack`, `uvicorn`).
++++ Added: `location` parameter support in `calendar_service.py` and FastMCP `calendar_create_event` tool.
+
+### 2026-09-12 (Milestone M6: Tab Isolation & Dashboard Upgrade)
++++ Added: Dedicated `ChatRecords` worksheet tab created via one-off migration script `scripts/migrate_to_chat_records.py` with 11 canonical headers, preserving legacy `Sheet1` intact and migrating historical rows with aligned columns.
++++ Added: Configured `GOOGLE_SHEET_TAB_NAME=ChatRecords` across `config.py`, `sheets_service.py`, `.env`, and `.env.example`.
++++ Added: Real-time Slack user name resolution in `slack_bot.py` via Slack API `users.info` utilizing active `users:read` OAuth scope (resolving `U0C0YD1F8TG` to `Eland Chan`), with fallback user ID subteam resolution in `config.get_subteam`.
++++ Added: Upgraded FastAPI Dashboard template (`dashboard/templates/index.html`) with 9 visible columns including Conversation Topic, Category pills, tabular date filter (`format_date`), and strict URL scheme validation (`http://`, `https://`, `slack://`) ensuring broken links are never rendered for non-URL values.
++++ Added: Docker offline resilience in `run.sh` enabling clean startup with in-memory vector tracking fallback when Docker is inactive.
+--- Removed: Hardcoded fallback to `Sheet1` in `sheets_service.get_sheet_tab_name()`. Reason for removal: Pointed default worksheet tab to `ChatRecords` to prevent column shifting against legacy 7-column header schemas.
 
 ### 2026-09-12
 +++ Added: Standalone Qdrant Vector Database via Docker Compose (`docker-compose.yml`) exposing REST API (6333) and native visual dashboard (`http://localhost:6333/dashboard`) with persistent storage mapped to `./data/qdrant_storage`.

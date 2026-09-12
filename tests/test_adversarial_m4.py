@@ -121,8 +121,9 @@ class TestDashboardMalformedRecords:
             assert "{&#39;internal_key&#39;: &#39;nested_value&#39;}" in html
             # Deadline 0 is falsy in Jinja2 {% if r["Deadline"] %}
             assert '<span class="deadline">0</span>' not in html
-            # Link 999 is truthy in Jinja2 {% if r["Link"] %}
-            assert 'href="999"' in html
+            # Link 999 is not a valid URL scheme, so it is filtered out and omitted
+            assert 'href="999"' not in html
+            assert '<a class="link"' not in html
 
             res_api = client.get("/api/records")
             assert res_api.status_code == 200
@@ -232,16 +233,12 @@ class TestDashboardXssSecurity:
             assert response.status_code == 200
             html = response.text
 
-            # Double quotes should be escaped as &#34; preventing attribute breakout
-            assert 'href="&#34; onmouseover=&#34;alert(1)&#34; data-x=&#34;"' in html
+            # Non-URL payloads are filtered out and omitted from rendering
+            assert '<a class="link"' not in html
             assert 'onmouseover="alert(1)"' not in html
 
     def test_xss_javascript_pseudo_protocol_in_link(self, client):
-        """CRITICAL AUDIT: Check whether javascript: pseudo-protocol in Link is filtered or rendered.
-
-        Jinja2 escapes HTML characters (<, >, &, \", ') but does NOT validate URI schemes.
-        A link with href=\"javascript:...\" executes in browser if not filtered.
-        """
+        """Verify that javascript: pseudo-protocol in Link is filtered out and omitted."""
         js_link_payload = {
             "Message": "Testing javascript link",
             "Category": "Security",
@@ -257,8 +254,9 @@ class TestDashboardXssSecurity:
             assert response.status_code == 200
             html = response.text
 
-            # Observe empirical behavior: Jinja2 renders href="javascript:alert(document.domain)"
-            assert 'href="javascript:alert(document.domain)"' in html
+            # javascript: scheme is not http/https/slack, so it is filtered out
+            assert 'href="javascript:' not in html
+            assert '<a class="link"' not in html
 
     def test_ssti_expressions_treated_as_literals(self, client):
         """Verify that template syntax like {{ 7 * 7 }} is not evaluated as SSTI."""

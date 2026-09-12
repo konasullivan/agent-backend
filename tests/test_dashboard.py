@@ -87,10 +87,11 @@ class TestDashboardHtml:
             assert "<title>Business Chat Record</title>" in html
             assert "<h1>Business Chat Record</h1>" in html
 
-            # Verify all 8 rendered table headers
+            # Verify all 9 rendered table headers
             visible_headers = [
                 "<th>Message</th>",
                 "<th>Category</th>",
+                "<th>Topic</th>",
                 "<th>Staff Member</th>",
                 "<th>Subteam</th>",
                 "<th>Date</th>",
@@ -120,7 +121,7 @@ class TestDashboardHtml:
             assert pos_newest < pos_middle < pos_oldest
 
     def test_dashboard_column_styling_and_pills(self, client):
-        """Verify table cells, category pill badges, deadline formatting, and links."""
+        """Verify table cells, category pill badges, topic badges, deadline formatting, and links."""
         with patch("dashboard.app.get_all_records", return_value=[SAMPLE_RECORDS_11_COLS[0]]):
             response = client.get("/")
             assert response.status_code == 200
@@ -128,12 +129,13 @@ class TestDashboardHtml:
 
             assert "<td>First interaction (oldest)</td>" in html
             assert '<span class="pill">Fundraiser</span>' in html
+            assert '<span class="pill pill-topic">Charity Gala</span>' in html
             assert "<td>Alice Smith</td>" in html
             assert "<td>Outreach</td>" in html
             assert "<td>2026-09-01 10:00:00</td>" in html
             assert "<td>Initial setup meeting</td>" in html
             assert '<span class="deadline">2026-09-10</span>' in html
-            assert '<a class="link" href="https://slack.com/archives/C123/p1001" target="_blank">Open</a>' in html
+            assert '<a class="link" href="https://slack.com/archives/C123/p1001" target="_blank">Open in Slack</a>' in html
 
     def test_dashboard_conditional_rendering(self, client):
         """Verify empty deadline and link omit span and anchor tags."""
@@ -182,6 +184,61 @@ class TestDashboardHtml:
             assert "<h1>Business Chat Record</h1>" in html
             assert "<th>Message</th>" in html
             assert "<tbody>" in html
+
+    def test_dashboard_link_validation_and_schemes(self, client):
+        """Verify only http, https, and slack schemes render clickable links; invalid URLs render '-'."""
+        test_records = [
+            {"Message": "HTTPS link", "Link": "https://slack.com/archives/C123/p1"},
+            {"Message": "HTTP link", "Link": "http://slack.com/archives/C123/p2"},
+            {"Message": "Slack scheme link", "Link": "slack://channel?id=C123&message=123"},
+            {"Message": "ISO date in link", "Link": "2026-09-12T10:00:00Z"},
+            {"Message": "Error string in link", "Link": "Error: 404 Not Found"},
+            {"Message": "FTP scheme in link", "Link": "ftp://files.example.com"},
+            {"Message": "Empty link", "Link": ""},
+        ]
+        with patch("dashboard.app.get_all_records", return_value=test_records):
+            response = client.get("/")
+            assert response.status_code == 200
+            html = response.text
+
+            # Valid links must render styled 'Open in Slack' anchor tags with target="_blank"
+            assert '<a class="link" href="https://slack.com/archives/C123/p1" target="_blank">Open in Slack</a>' in html
+            assert '<a class="link" href="http://slack.com/archives/C123/p2" target="_blank">Open in Slack</a>' in html
+            assert '<a class="link" href="slack://channel?id=C123&amp;message=123" target="_blank">Open in Slack</a>' in html
+
+            # Invalid or empty links must not render anchor tags
+            assert '<a class="link" href="2026-09-12T10:00:00Z"' not in html
+            assert '<a class="link" href="Error: 404 Not Found"' not in html
+            assert '<a class="link" href="ftp://files.example.com"' not in html
+
+    def test_dashboard_topic_keys_and_badges(self, client):
+        """Verify both 'Conversation Topic' and 'Topic' keys render pill badges."""
+        records = [
+            {"Message": "Full key", "Conversation Topic": "Architecture Review"},
+            {"Message": "Short key", "Topic": "Database Tuning"},
+            {"Message": "Empty key", "Conversation Topic": ""},
+        ]
+        with patch("dashboard.app.get_all_records", return_value=records):
+            response = client.get("/")
+            assert response.status_code == 200
+            html = response.text
+
+            assert '<span class="pill pill-topic">Architecture Review</span>' in html
+            assert '<span class="pill pill-topic">Database Tuning</span>' in html
+
+    def test_dashboard_date_formatting(self, client):
+        """Verify ISO date formatting and raw fallback."""
+        records = [
+            {"Message": "ISO with Z", "Date": "2026-09-12T14:30:00Z"},
+            {"Message": "Raw string", "Date": "Not-A-Date-String"},
+        ]
+        with patch("dashboard.app.get_all_records", return_value=records):
+            response = client.get("/")
+            assert response.status_code == 200
+            html = response.text
+
+            assert "<td>2026-09-12 14:30:00</td>" in html
+            assert "<td>Not-A-Date-String</td>" in html
 
 
 class TestDashboardApi:

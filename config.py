@@ -11,7 +11,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "placeholder-gemini-key"
 
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+GOOGLE_SHEET_TAB_NAME = os.getenv("GOOGLE_SHEET_TAB_NAME", "ChatRecords")
 GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
+TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
+LOCAL_TIMEZONE = TIMEZONE
 
 # Qdrant Vector Search
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
@@ -46,8 +49,12 @@ STAFF_SUBTEAM = {
 }
 
 
-def get_subteam(author_name: str) -> str:
-    return STAFF_SUBTEAM.get(author_name, "Unassigned")
+def get_subteam(author_name: str, user_id: str = "") -> str:
+    if author_name and author_name in STAFF_SUBTEAM:
+        return STAFF_SUBTEAM[author_name]
+    if user_id and user_id in STAFF_SUBTEAM:
+        return STAFF_SUBTEAM[user_id]
+    return "Unassigned"
 
 
 CATEGORIES: list[str] = [

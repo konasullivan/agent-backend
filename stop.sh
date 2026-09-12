@@ -94,6 +94,11 @@ if [ "$pid_files_found" -eq 0 ]; then
   echo "No active PID files found in $RUN_DIR."
 fi
 
+# Clean up any stray background processes that may have lost their PID files
+pkill -f "main.py --listen-slack" 2>/dev/null || true
+pkill -f "uvicorn dashboard.app:app" 2>/dev/null || true
+
+
 # 2. Stop Qdrant container cleanly via docker compose stop
 if docker compose version >/dev/null 2>&1; then
   DOCKER_COMPOSE="docker compose"

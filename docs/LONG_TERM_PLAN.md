@@ -122,7 +122,35 @@ The Agent Backend serves as an enterprise workspace automation bridge. It captur
 - [x] Author long-term architecture and implementation plan in `docs/LONG_TERM_PLAN.md`.
 - [x] Update `CHANGELOG.md` in Inverted Log format documenting all migrations and removals.
 
-### Future Enhancements (Post-M5 Roadmap)
+### Milestone M6: Canonical 11-Column Tab Isolation & Enhanced Dashboard UI (COMPLETED)
+*Goal: Isolate Google Workspace data from legacy 7-column sheets, enable Slack user resolution, and modernize dashboard UI.*
+- [x] Authored one-off migration script `scripts/migrate_to_chat_records.py` creating new `ChatRecords` worksheet tab with 11 canonical headers.
+- [x] Migrated and realigned historical rows from `Sheet1` into `ChatRecords` without touching or corrupting legacy data.
+- [x] Configured `GOOGLE_SHEET_TAB_NAME=ChatRecords` in `config.py` and `.env`.
+- [x] Verified Slack API `users.info` live resolution with newly granted `users:read` OAuth scope (resolving `U0C0YD1F8TG` to `Eland Chan`).
+- [x] Upgraded `dashboard/templates/index.html` with responsive table wrapper, Topic and Category pill badges, formatted date filter, and strict URL scheme validation (`http://`, `https://`, `slack://`) preventing broken links.
+- [x] Made `run.sh` resilient to offline Docker environments with in-memory fallback.
+- [x] 100% pass rate across 316 unit and integration tests.
+
+### Milestone M7: 24-Hour Channel Context Ingestion & Event Link Backpropagation (COMPLETED)
+*Goal: Enable cross-message semantic continuity for unthreaded chat, schedule calendar events accurately, back-propagate event URLs to Sheets, and refine process termination.*
+- [x] Implemented `_get_recent_channel_context()` in `slack_bot.py` fetching up to 24 hours of preceding channel history.
+- [x] Enhanced `ai_extractor.py` system prompt and extraction function to resolve relative dates/times against UTC timestamps into ISO 8601 datetimes (`YYYY-MM-DDTHH:MM:SS`) and extract meeting locations.
+- [x] Extended `calendar_service.py` and `calendar_create_event` MCP tool with optional `location` parameter.
+- [x] Added `sheets_update_range` MCP tool and `sheets_service.update_record_link` to dynamically replace Slack links in Column K (`Link`) with direct Google Calendar event links (`https://www.google.com/calendar/event?eid=...`).
+- [x] Upgraded `dashboard/templates/index.html` to render calendar links as `Open Event 📅` with `.link-event` styling.
+- [x] Swept orphan background processes in `stop.sh` (`main.py --listen-slack`, `uvicorn`).
+- [x] Maintained 100% pass rate across 316 tests.
+
+### Milestone M8: Local Timezone Alignment & Conversational Event Pruning (COMPLETED)
+*Goal: Localize calendar scheduling to America/New_York and automatically delete incomplete/superseded events upon message enrichment.*
+- [x] Localized naive ISO timestamps to `America/New_York` (`-04:00` EDT) across `config.py`, `calendar_service.py`, and `ai_extractor.py`, fixing UTC offset shifting.
+- [x] Registered FastMCP `calendar_delete_event(calendar_id, event_id)` tool in `src/mcp_server/server.py` and implemented `GoogleWorkspaceService.delete_event()`.
+- [x] Added automated pruning for incomplete events (`prune_superseded_events`) and active conversation event tracking (`_active_events`) in `slack_bot.py`.
+- [x] Pruned duplicate 3:00 PM and 4:00 PM events and rescheduled Becker Dining Hall (8:00 PM EDT) and Texas Roadhouse (7:00 PM EDT).
+- [x] Maintained 100% test pass rate across 322 tests.
+
+### Future Enhancements (Post-M8 Roadmap)
 - **Persistent Conversation Memory**: Migrate `_active_conversations` in `conversation_tracker.py` from in-memory dictionary to SQLite / PostgreSQL or a vector database (pgvector / Chroma) to survive application restarts.
 - **Multi-Channel & Multi-Workspace Routing**: Expand Slack bot configuration to dynamically monitor multiple channels with channel-specific Sheets and Calendar routing.
 - **Bidirectional Event Sync**: Implement webhooks or polling to sync changes made directly in Google Calendar back into Slack status or announcements.
@@ -140,12 +168,18 @@ The Agent Backend serves as an enterprise workspace automation bridge. It captur
 - `sheets_append_rows(spreadsheet_id: str, sheet_name: str, rows: list[list[Any]]) -> dict[str, Any]`
   - Appends 2D list of values. Empty list short-circuits safely.
   - Returns `{"status": "success", "spreadsheet_id": str, "sheet_name": str, "rows_appended": int, "updated_range": str}`.
+- `sheets_update_range(spreadsheet_id: str, sheet_name: str, range_notation: str, values: list[list[Any]]) -> dict[str, Any]`
+  - Updates a specific range or cell in the worksheet.
+  - Returns `{"status": "success", "spreadsheet_id": str, "sheet_name": str, "updated_range": str, "updated_cells": int}`.
 - `sheets_get_records(spreadsheet_id: str, sheet_name: str) -> dict[str, Any]`
   - Reads tab rows and maps them to dictionaries keyed by row 1 headers.
   - Returns `{"status": "success", "spreadsheet_id": str, "sheet_name": str, "records": list[dict[str, Any]], "count": int}`.
-- `calendar_create_event(calendar_id: str, summary: str, start_iso: str, end_iso: str, description: str = "", location: str = "") -> dict[str, Any]`
+- `calendar_create_event(calendar_id: str, summary: str, start_iso: str, end_iso: str, description: str = "", location: str = "", time_zone: str = "") -> dict[str, Any]`
   - Validates ISO 8601 datetimes and inserts calendar event.
   - Returns `{"status": "success", "event_id": str, "html_link": str, "summary": str, "start": str, "end": str}`.
+- `calendar_delete_event(calendar_id: str, event_id: str) -> dict[str, Any]`
+  - Deletes an event from Google Calendar by ID.
+  - Returns `{"status": "success", "calendar_id": str, "event_id": str, "deleted": bool}`.
 - `calendar_list_events(calendar_id: str, max_results: int = 10) -> dict[str, Any]`
   - Lists upcoming events ordered by start time.
   - Returns `{"status": "success", "calendar_id": str, "count": int, "events": list[dict[str, Any]]}`.

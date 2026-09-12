@@ -18,7 +18,9 @@ async def test_tool_registration():
             "sheets_ensure_tab",
             "sheets_append_rows",
             "sheets_get_records",
+            "sheets_update_range",
             "calendar_create_event",
+            "calendar_delete_event",
             "calendar_list_events",
         }
         assert expected.issubset(tool_names)
@@ -101,6 +103,22 @@ async def test_inproc_calendar_list_events(mock_workspace_service):
         )
         assert not res.is_error
         assert len(res.content) > 0
+
+
+@pytest.mark.asyncio
+async def test_inproc_calendar_delete_event(mock_workspace_service):
+    """Verify in-process tool execution of calendar_delete_event."""
+    async with Client(mcp_server) as client:
+        res = await client.call_tool(
+            "calendar_delete_event",
+            arguments={
+                "calendar_id": "test@example.com",
+                "event_id": "event_123",
+            },
+        )
+        assert not res.is_error
+        assert len(res.content) > 0
+
 
 
 @pytest.mark.asyncio

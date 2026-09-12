@@ -4,46 +4,354 @@
 <meta charset="UTF-8">
 <title>Business Chat Record</title>
 <style>
-  body { font-family: -apple-system, Arial, sans-serif; background: #f6f7f9; margin: 0; padding: 2rem; color: #1a1a1a; }
-  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
-  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-  th, td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid #eee; font-size: 0.9rem; vertical-align: top; }
-  th { background: #fafafa; font-weight: 600; }
-  tr:last-child td { border-bottom: none; }
-  .pill { display: inline-block; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.78rem; background: #eef0ff; color: #3a3aa0; }
-  .deadline { color: #b8590a; font-weight: 600; }
-  a.link { color: #4f6df5; text-decoration: none; }
+  :root {
+    --bg-page: #f8fafc;
+    --bg-card: #ffffff;
+    --border-color: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    
+    /* Category: subtle blue/purple badge */
+    --cat-bg: #ede9fe;
+    --cat-color: #5b21b6;
+    --cat-border: #ddd6fe;
+
+    /* Topic: subtle green/teal badge */
+    --topic-bg: #ecfdf5;
+    --topic-color: #065f46;
+    --topic-border: #a7f3d0;
+
+    /* Deadline: warning/amber badge */
+    --deadline-bg: #fffbeb;
+    --deadline-color: #92400e;
+    --deadline-border: #fde68a;
+
+    /* Link: clean button */
+    --link-color: #4338ca;
+    --link-bg: #f8fafc;
+    --link-border: #e2e8f0;
+    --link-hover-bg: #4338ca;
+    --link-hover-text: #ffffff;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 2rem 1.5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  .header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .header-left h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 0.3rem 0;
+    letter-spacing: -0.02em;
+  }
+
+  .header-left p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  .header-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #047857;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    background-color: #10b981;
+    border-radius: 50%;
+  }
+
+  .count-badge {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+  }
+
+  .table-wrapper {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: left;
+    min-width: 1080px;
+  }
+
+  thead th {
+    background: #f8fafc;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  tbody td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    vertical-align: top;
+    line-height: 1.45;
+  }
+
+  tbody tr {
+    transition: background-color 0.15s ease-in-out;
+  }
+
+  tbody tr:hover td {
+    background-color: #f8fafc;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Specific column formatting */
+  td:nth-child(1) {
+    max-width: 320px;
+    word-break: break-word;
+  }
+
+  td:nth-child(4) {
+    font-weight: 500;
+    color: #1e293b;
+    white-space: nowrap;
+  }
+
+  td:nth-child(5) {
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  td:nth-child(6) {
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  td:nth-child(7) {
+    max-width: 240px;
+    word-break: break-word;
+    color: var(--text-secondary);
+  }
+
+  /* Pills & Badges */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+
+  .pill-category {
+    background: var(--cat-bg);
+    color: var(--cat-color);
+    border: 1px solid var(--cat-border);
+  }
+
+  .pill-topic {
+    background: var(--topic-bg);
+    color: var(--topic-color);
+    border: 1px solid var(--topic-border);
+  }
+
+  .deadline {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: var(--deadline-bg);
+    color: var(--deadline-color);
+    border: 1px solid var(--deadline-border);
+    white-space: nowrap;
+  }
+
+  /* Link button */
+  a.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--link-color);
+    background: var(--link-bg);
+    border: 1px solid var(--link-border);
+    padding: 0.25rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.15s ease-in-out;
+  }
+
+  a.link::after {
+    content: "↗";
+    font-size: 0.75rem;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s ease-in-out;
+  }
+
+  a.link:hover {
+    background: var(--link-hover-bg);
+    color: var(--link-hover-text);
+    border-color: var(--link-hover-bg);
+    text-decoration: none;
+  }
+
+  a.link:hover::after {
+    opacity: 1;
+    color: var(--link-hover-text);
+  }
+
+  /* Calendar Event link button */
+  a.link-event {
+    color: #047857;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+  }
+
+  a.link-event::after {
+    content: "📅";
+    font-size: 0.75rem;
+    line-height: 1;
+    opacity: 0.9;
+  }
+
+  a.link-event:hover {
+    background: #059669;
+    color: #ffffff;
+    border-color: #059669;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem !important;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  @media (max-width: 768px) {
+    body {
+      padding: 1rem 0.75rem;
+    }
+  }
 </style>
 </head>
 <body>
-  <h1>Business Chat Record</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>Message</th>
-        <th>Category</th>
-        <th>Staff Member</th>
-        <th>Subteam</th>
-        <th>Date</th>
-        <th>Notes</th>
-        <th>Deadline</th>
-        <th>Link</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in records %}
-      <tr>
-        <td>{{ r["Message"] }}</td>
-        <td><span class="pill">{{ r["Category"] }}</span></td>
-        <td>{{ r["Staff Member"] }}</td>
-        <td>{{ r["Subteam"] }}</td>
-        <td>{{ r["Date"] }}</td>
-        <td>{{ r["Notes"] }}</td>
-        <td>{% if r["Deadline"] %}<span class="deadline">{{ r["Deadline"] }}</span>{% endif %}</td>
-        <td>{% if r["Link"] %}<a class="link" href="{{ r['Link'] }}" target="_blank">Open</a>{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="container">
+    <header class="header-card">
+      <div class="header-left">
+        <h1>Business Chat Record</h1>
+        <p>Real-time interaction log and Slack conversation records</p>
+      </div>
+      <div class="header-badges">
+        <span class="status-badge"><span class="status-dot"></span> Live Sync</span>
+        <span class="count-badge">{{ records|length }} records</span>
+      </div>
+    </header>
+
+    <div class="table-wrapper">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Message</th>
+              <th>Category</th>
+              <th>Topic</th>
+              <th>Staff Member</th>
+              <th>Subteam</th>
+              <th>Date</th>
+              <th>Notes</th>
+              <th>Deadline</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td>{{ r["Message"] }}</td>
+              <td><span class="pill">{{ r["Category"] }}</span></td>
+              {% set topic = (r["Conversation Topic"] if (r and "Conversation Topic" in r) else (r["Topic"] if (r and "Topic" in r) else "")) %}<td>{% if topic %}<span class="pill pill-topic">{{ topic }}</span>{% else %}-{% endif %}</td>
+              <td>{{ r["Staff Member"] }}</td>
+              <td>{{ r["Subteam"] }}</td>
+              <td>{{ r["Date"] | format_date }}</td>
+              <td>{{ r["Notes"] }}</td>
+              <td>{% if r and r["Deadline"] %}<span class="deadline">{{ r["Deadline"] }}</span>{% endif %}</td>
+              {% set link = (r and r["Link"]) %}<td>{% if link is string and ("google.com/calendar" in link or "calendar.google.com" in link) %}<a class="link link-event" href="{{ r['Link'] }}" target="_blank">Open Event</a>{% elif link is string and (link.startswith("http://") or link.startswith("https://") or link.startswith("slack://")) %}<a class="link" href="{{ r['Link'] }}" target="_blank">Open in Slack</a>{% else %}-{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

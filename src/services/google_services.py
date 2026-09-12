@@ -265,6 +265,45 @@ class GoogleWorkspaceService:
             "updated_range": updates.get("updatedRange", ""),
         }
 
+    def update_range(
+        self,
+        spreadsheet_id: str,
+        sheet_name: str,
+        range_notation: str,
+        values: list[list[Any]],
+    ) -> dict[str, Any]:
+        """Update a range of cells in Google Sheets.
+
+        Args:
+            spreadsheet_id: Google Spreadsheet ID.
+            sheet_name: Worksheet tab title.
+            range_notation: Target cell or range (e.g. 'K17' or "'ChatRecords'!K17").
+            values: 2D list of values to write.
+
+        Returns:
+            Dict containing status, spreadsheet_id, sheet_name, updated_range, and updated_cells.
+        """
+        safe_range = range_notation if "!" in range_notation else f"'{sheet_name}'!{range_notation}"
+        body = {"values": values}
+        response = (
+            self.sheets_service.spreadsheets()
+            .values()
+            .update(
+                spreadsheetId=spreadsheet_id,
+                range=safe_range,
+                valueInputOption="USER_ENTERED",
+                body=body,
+            )
+            .execute()
+        )
+        return {
+            "status": "success",
+            "spreadsheet_id": spreadsheet_id,
+            "sheet_name": sheet_name,
+            "updated_range": response.get("updatedRange", safe_range),
+            "updated_cells": response.get("updatedCells", 0),
+        }
+
     def get_records(
         self,
         spreadsheet_id: str,
@@ -354,6 +393,7 @@ class GoogleWorkspaceService:
         end_iso: str,
         description: str = "",
         location: str = "",
+        time_zone: str = "",
     ) -> dict[str, Any]:
         """Create an event on the specified Google Calendar.
 
@@ -364,6 +404,7 @@ class GoogleWorkspaceService:
             end_iso: Event end datetime in ISO 8601 string format.
             description: Optional event description or notes.
             location: Optional event location or link.
+            time_zone: Optional IANA timezone (e.g. 'America/New_York').
 
         Returns:
             Dict containing status, event_id, html_link, summary, start, and end.
@@ -385,7 +426,7 @@ class GoogleWorkspaceService:
                 f"end_iso ({end_iso}) must be greater than or equal to start_iso ({start_iso})"
             )
 
-        event_body = {
+        event_body: dict[str, Any] = {
             "summary": summary,
             "description": description,
             "location": location,
@@ -396,6 +437,9 @@ class GoogleWorkspaceService:
                 "dateTime": end_iso,
             },
         }
+        if time_zone:
+            event_body["start"]["timeZone"] = time_zone
+            event_body["end"]["timeZone"] = time_zone
 
         created = (
             self.calendar_service.events()
@@ -411,6 +455,43 @@ class GoogleWorkspaceService:
             "start": created.get("start", {}).get("dateTime", start_iso),
             "end": created.get("end", {}).get("dateTime", end_iso),
         }
+
+    def delete_event(
+        self,
+        calendar_id: str,
+        event_id: str,
+    ) -> dict[str, Any]:
+        """Delete an event by ID from Google Calendar.
+
+        Args:
+            calendar_id: Target calendar email or ID.
+            event_id: Event ID to remove.
+
+        Returns:
+            Dict containing status, calendar_id, event_id, and deleted boolean.
+        """
+        try:
+            self.calendar_service.events().delete(
+                calendarId=calendar_id,
+                eventId=event_id,
+            ).execute()
+            return {
+                "status": "success",
+                "calendar_id": calendar_id,
+                "event_id": event_id,
+                "deleted": True,
+            }
+        except Exception as exc:
+            err_str = str(exc)
+            if "404" in err_str or "410" in err_str or "Resource has been deleted" in err_str:
+                return {
+                    "status": "success",
+                    "calendar_id": calendar_id,
+                    "event_id": event_id,
+                    "deleted": True,
+                    "already_deleted": True,
+                }
+            raise
 
     def list_events(
         self,
@@ -448,6 +529,8 @@ class GoogleWorkspaceService:
                 {
                     "id": item.get("id"),
                     "summary": item.get("summary"),
+                    "location": item.get("location", ""),
+                    "description": item.get("description", ""),
                     "start": item.get("start", {}).get("dateTime")
                     or item.get("start", {}).get("date"),
                     "end": item.get("end", {}).get("dateTime")

@@ -18,11 +18,11 @@ _tab_ensured: bool = False
 
 
 def get_sheet_tab_name() -> str:
-    """Resolve target sheet tab name from config or environment, defaulting to 'Sheet1'."""
+    """Resolve target sheet tab name from config or environment, defaulting to 'ChatRecords'."""
     return getattr(
         config,
         "GOOGLE_SHEET_TAB_NAME",
-        os.getenv("GOOGLE_SHEET_TAB_NAME", "Sheet1"),
+        os.getenv("GOOGLE_SHEET_TAB_NAME", "ChatRecords"),
     )
 
 
@@ -62,15 +62,16 @@ def ensure_tab_exists() -> None:
         )
 
 
-def append_record(record: dict) -> None:
+def append_record(record: dict) -> str:
     """Append a business chat record dictionary to Google Sheets via FastMCP.
 
     record keys should match config.SHEET_HEADERS.
     Dispatches to MCP tool 'sheets_append_rows'.
+    Returns updated_range (e.g. "'ChatRecords'!A17:K17").
     """
     ensure_tab_exists()
     row = [record.get(col, "") for col in config.SHEET_HEADERS]
-    call_mcp_tool_sync(
+    res = call_mcp_tool_sync(
         "sheets_append_rows",
         {
             "spreadsheet_id": get_spreadsheet_id(),
@@ -78,6 +79,33 @@ def append_record(record: dict) -> None:
             "rows": [row],
         },
     )
+    return str(res.get("updated_range") or "") if isinstance(res, dict) else ""
+
+
+def update_record_link(updated_range: str, link: str) -> None:
+    """Update the 'Link' column (Column K) of a previously appended row."""
+    if not updated_range or not link:
+        return
+    import re
+    # Match row numbers from range like 'ChatRecords'!A17:K17 or A17:K17
+    match = re.search(r"(\d+)(?::[A-Za-z]+(\d+))?$", updated_range)
+    if not match:
+        return
+    row_num = match.group(1)
+    target_cell = f"K{row_num}"
+
+    try:
+        call_mcp_tool_sync(
+            "sheets_update_range",
+            {
+                "spreadsheet_id": get_spreadsheet_id(),
+                "sheet_name": get_sheet_tab_name(),
+                "range_notation": target_cell,
+                "values": [[link]],
+            },
+        )
+    except Exception as exc:
+        logger.warning("Failed to update record link via MCP: %s", exc)
 
 
 def get_all_records() -> list[dict]:

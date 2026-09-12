@@ -53,55 +53,49 @@ echo "           🚀 Starting Agent Backend Infrastructure               "
 echo "=================================================================="
 
 # 1. Check Docker is installed and running
-if ! command -v docker >/dev/null 2>&1; then
-  echo "❌ [Error] Docker CLI is not installed or not in PATH." >&2
-  exit 1
-fi
-
-if ! docker info >/dev/null 2>&1; then
-  echo "❌ [Error] Docker daemon is not running. Please start Docker Desktop or the Docker daemon." >&2
-  exit 1
-fi
-echo "✓ Docker daemon is active."
-
-# Determine docker compose syntax
-if docker compose version >/dev/null 2>&1; then
-  DOCKER_COMPOSE="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
-  DOCKER_COMPOSE="docker-compose"
-else
-  echo "❌ [Error] Neither 'docker compose' nor 'docker-compose' is available." >&2
-  exit 1
-fi
-
-# 2. Start Qdrant via docker compose up -d
-echo "Starting Qdrant vector database via '$DOCKER_COMPOSE up -d'..."
-if ! $DOCKER_COMPOSE up -d; then
-  echo "❌ [Error] Failed to launch Qdrant container with '$DOCKER_COMPOSE up -d'." >&2
-  exit 1
-fi
-
-# 3. Poll http://localhost:6333/healthz until Qdrant is healthy (up to 30s timeout)
-HEALTH_URL="http://localhost:6333/healthz"
-TIMEOUT=30
-ELAPSED=0
-HEALTHY=0
-
-echo "Polling Qdrant health check at $HEALTH_URL (timeout: ${TIMEOUT}s)..."
-while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-  if curl -s -f "$HEALTH_URL" >/dev/null 2>&1; then
-    HEALTHY=1
-    break
+DOCKER_AVAILABLE=0
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  echo "✓ Docker daemon is active."
+  if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+    DOCKER_AVAILABLE=1
+  elif command -v docker-compose >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+    DOCKER_AVAILABLE=1
   fi
-  sleep 1
-  ELAPSED=$((ELAPSED + 1))
-done
-
-if [ "$HEALTHY" -ne 1 ]; then
-  echo "❌ [Error] Qdrant did not become healthy within ${TIMEOUT} seconds." >&2
-  exit 1
+else
+  echo "⚠️  [Notice] Docker daemon is not active. Using in-memory fallback for vector tracking."
 fi
-echo "✓ Qdrant health check passed (${ELAPSED}s)."
+
+# 2. Start Qdrant via docker compose if Docker is available
+if [ "$DOCKER_AVAILABLE" -eq 1 ]; then
+  echo "Starting Qdrant vector database via '$DOCKER_COMPOSE up -d'..."
+  if ! $DOCKER_COMPOSE up -d; then
+    echo "⚠️  [Warning] Failed to launch Qdrant container with '$DOCKER_COMPOSE up -d'." >&2
+  else
+    # 3. Poll http://localhost:6333/healthz until Qdrant is healthy (up to 30s timeout)
+    HEALTH_URL="http://localhost:6333/healthz"
+    TIMEOUT=30
+    ELAPSED=0
+    HEALTHY=0
+
+    echo "Polling Qdrant health check at $HEALTH_URL (timeout: ${TIMEOUT}s)..."
+    while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+      if curl -s -f "$HEALTH_URL" >/dev/null 2>&1; then
+        HEALTHY=1
+        break
+      fi
+      sleep 1
+      ELAPSED=$((ELAPSED + 1))
+    done
+
+    if [ "$HEALTHY" -ne 1 ]; then
+      echo "⚠️  [Warning] Qdrant did not become healthy within ${TIMEOUT} seconds. Falling back to in-memory." >&2
+    else
+      echo "✓ Qdrant health check passed (${ELAPSED}s)."
+    fi
+  fi
+fi
 
 # 4. Create .run/ directory if missing
 mkdir -p "$RUN_DIR"

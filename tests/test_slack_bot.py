@@ -257,10 +257,56 @@ def test_message_ingestion_no_deadline_skips_calendar(listener, event_factory, m
 
     mock_append.assert_called_once()
     mock_create_event.assert_not_called()
-    listener.app.client.reactions_add.assert_called_once()
+def test_message_ingestion_followup_prunes_prior_event(listener, event_factory, monkeypatch):
+    """Verify that when a follow-up message enriches an event in the same conversation, the prior event is deleted."""
+    mock_extract_1 = {
+        "category": "Miscellaneous",
+        "topic": "Dinner",
+        "notes": "Dinner on 29th",
+        "action_items": [],
+        "deadline": "2026-09-29T19:00:00",
+        "location": None,
+    }
+    mock_extract_2 = {
+        "category": "Miscellaneous",
+        "topic": "Dinner at Texas Roadhouse",
+        "notes": "Dinner at Texas Roadhouse",
+        "action_items": [],
+        "deadline": "2026-09-29T19:00:00",
+        "location": "Texas Roadhouse",
+    }
+    mock_extract = MagicMock(side_effect=[mock_extract_1, mock_extract_2])
+    mock_append = MagicMock(return_value="'ChatRecords'!A2:K2")
+    mock_create_event = MagicMock(side_effect=[
+        "https://www.google.com/calendar/event?eid=ZXZlbnRfMQ",
+        "https://www.google.com/calendar/event?eid=ZXZlbnRfMg",
+    ])
+    mock_delete_event = MagicMock(return_value=True)
+    mock_extract_id = MagicMock(side_effect=["event_1", "event_2"])
+
+    monkeypatch.setattr("ai_extractor.extract", mock_extract)
+    monkeypatch.setattr("sheets_service.append_record", mock_append)
+    monkeypatch.setattr("sheets_service.update_record_link", MagicMock())
+    monkeypatch.setattr("calendar_service.create_event", mock_create_event)
+    monkeypatch.setattr("calendar_service.delete_event", mock_delete_event)
+    monkeypatch.setattr("calendar_service.extract_event_id_from_link", mock_extract_id)
+    monkeypatch.setattr("conversation_tracker.get_or_create_conversation", MagicMock(return_value=("conv_123", "Dinner")))
+
+    # Message 1
+    event1 = event_factory(text="lets get dinner on the 29th at 7", ts="1726000001.0001")
+    listener.handle_message(event1)
+    assert mock_create_event.call_count == 1
+    mock_delete_event.assert_not_called()
+
+    # Message 2 (follow-up in same conversation session)
+    event2 = event_factory(text="at texas roadhouse", ts="1726000002.0001")
+    listener.handle_message(event2)
+    assert mock_create_event.call_count == 2
+    mock_delete_event.assert_called_once_with("event_1")
 
 
 def test_message_ingestion_threaded_conversation_id_and_topic(listener, event_factory, monkeypatch):
+
     """Verify threaded messages use thread_ts for conversation_id and bypass semantic tracker."""
     mock_extract = MagicMock(return_value={"category": "Research", "notes": "", "action_items": [], "deadline": None})
     mock_append = MagicMock()

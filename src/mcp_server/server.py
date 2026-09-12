@@ -113,6 +113,39 @@ def sheets_append_rows(
 
 
 @mcp_server.tool()
+def sheets_update_range(
+    spreadsheet_id: str,
+    sheet_name: str,
+    range_notation: str,
+    values: list[list[Any]],
+) -> dict[str, Any]:
+    """Update a range of cells in the specified worksheet tab in Google Sheets.
+
+    Args:
+        spreadsheet_id: Google Spreadsheet ID.
+        sheet_name: Worksheet tab name.
+        range_notation: Target cell or range (e.g. 'K17').
+        values: 2D list of values to write.
+
+    Returns:
+        Dict containing status, spreadsheet_id, sheet_name, updated_range, and updated_cells.
+    """
+    logger.info(
+        "Executing sheets_update_range: spreadsheet=%s, sheet_name=%s, range=%s",
+        spreadsheet_id,
+        sheet_name,
+        range_notation,
+    )
+    svc = get_google_service()
+    return svc.update_range(
+        spreadsheet_id=spreadsheet_id,
+        sheet_name=sheet_name,
+        range_notation=range_notation,
+        values=values,
+    )
+
+
+@mcp_server.tool()
 def sheets_get_records(
     spreadsheet_id: str,
     sheet_name: str,
@@ -151,6 +184,7 @@ def calendar_create_event(
     end_iso: str,
     description: str = "",
     location: str = "",
+    time_zone: str = "",
 ) -> dict[str, Any]:
     """Create a new event on the specified Google Calendar.
 
@@ -161,6 +195,7 @@ def calendar_create_event(
         end_iso: End datetime in ISO 8601 format (e.g. 2026-09-11T11:00:00-04:00).
         description: Optional event description or notes.
         location: Optional meeting location or video call link.
+        time_zone: Optional IANA timezone string (e.g. 'America/New_York').
 
     Returns:
         Dict containing status, event_id, html_link, summary, start, and end.
@@ -178,7 +213,31 @@ def calendar_create_event(
         end_iso=end_iso,
         description=description,
         location=location,
+        time_zone=time_zone,
     )
+
+
+@mcp_server.tool()
+def calendar_delete_event(
+    calendar_id: str,
+    event_id: str,
+) -> dict[str, Any]:
+    """Delete an event from Google Calendar by ID.
+
+    Args:
+        calendar_id: Google Calendar ID.
+        event_id: Event ID to remove.
+
+    Returns:
+        Dict containing status, calendar_id, event_id, and deleted boolean.
+    """
+    logger.info(
+        "Executing calendar_delete_event: calendar=%s, event_id=%s",
+        calendar_id,
+        event_id,
+    )
+    svc = get_google_service()
+    return svc.delete_event(calendar_id=calendar_id, event_id=event_id)
 
 
 @mcp_server.tool()

@@ -60,6 +60,7 @@ class SlackSocketListener:
         self.handler: Optional[SocketModeHandler] = None
         self._user_cache: dict[str, str] = {}
         self._thread_topics: dict[str, str] = {}
+        self._active_events: dict[str, str] = {}
         self._bot_user_id: Optional[str] = None
 
         self._register_handlers()
@@ -136,6 +137,64 @@ class SlackSocketListener:
         self._thread_topics[thread_ts] = topic
         return topic
 
+    def _get_recent_channel_context(
+        self,
+        channel_id: str,
+        current_ts: str,
+        max_messages: int = 15,
+        hours: int = 24,
+    ) -> list[dict[str, str]]:
+        """Retrieve preceding messages from the past 24 hours in the channel with resolved names."""
+        if not channel_id:
+            return []
+        try:
+            oldest_ts = ""
+            if current_ts:
+                try:
+                    c_dt = float(current_ts)
+                    oldest_ts = str(c_dt - (hours * 3600))
+                except (ValueError, TypeError):
+                    pass
+
+            kwargs: dict[str, Any] = {
+                "channel": channel_id,
+                "limit": max_messages,
+            }
+            if current_ts:
+                kwargs["latest"] = current_ts
+                kwargs["inclusive"] = False
+            if oldest_ts:
+                kwargs["oldest"] = oldest_ts
+
+            res = self.app.client.conversations_history(**kwargs)
+            if not res.get("ok"):
+                return []
+
+            raw_msgs = res.get("messages", [])
+            context: list[dict[str, str]] = []
+            for m in reversed(raw_msgs):  # chronological order
+                if m.get("subtype") or m.get("bot_id"):
+                    continue
+                u_id = m.get("user") or ""
+                u_name = self._resolve_user_name(u_id)
+                m_text = (m.get("text") or "").strip()
+                if not m_text:
+                    continue
+                m_ts = m.get("ts") or ""
+                try:
+                    m_dt_str = datetime.fromtimestamp(float(m_ts), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    m_dt_str = ""
+                context.append({
+                    "author": u_name,
+                    "text": m_text,
+                    "date": m_dt_str,
+                })
+            return context
+        except Exception as exc:
+            logger.debug("Failed to retrieve recent channel context for %s: %s", channel_id, exc)
+            return []
+
     def _register_handlers(self) -> None:
         """Register Slack event listeners on the Bolt App."""
 
@@ -210,16 +269,22 @@ class SlackSocketListener:
             # 3. 7-Step User Message Ingestion Flow
             author_name = self._resolve_user_name(user_id)
 
-            # Step 1: Extract structured metadata
+            # Step 1: Extract structured metadata with 24h channel context
+            context_messages = self._get_recent_channel_context(channel_id, ts_str)
             try:
-                data = ai_extractor.extract(text, author_name)
+                if context_messages:
+                    data = ai_extractor.extract(text, author_name, context_messages=context_messages)
+                else:
+                    data = ai_extractor.extract(text, author_name)
             except Exception as exc:
                 logger.error("ai_extractor.extract failed: %s", exc, exc_info=True)
                 data = {
                     "category": "Miscellaneous",
+                    "topic": "General",
                     "notes": text[:100],
                     "action_items": [],
                     "deadline": None,
+                    "location": None,
                 }
 
             # Step 2: Conversation session grouping
@@ -231,13 +296,17 @@ class SlackSocketListener:
                     conversation_id, conversation_topic = (
                         conversation_tracker.get_or_create_conversation(text, dt)
                     )
+                    # If AI extractor produced a specific contextual topic, prioritize it
+                    ai_topic = data.get("topic")
+                    if ai_topic and ai_topic != "General":
+                        conversation_topic = ai_topic
                 except Exception as exc:
                     logger.error("conversation_tracker failed: %s", exc, exc_info=True)
                     conversation_id = f"convo_{ts_str}"
-                    conversation_topic = "General"
+                    conversation_topic = data.get("topic") or "General"
 
             # Step 3: Subteam mapping
-            subteam = config.get_subteam(author_name)
+            subteam = config.get_subteam(author_name, user_id=user_id)
 
             # Step 4: Permalink generation
             link = self._get_permalink(channel_id, ts_str)
@@ -263,7 +332,7 @@ class SlackSocketListener:
                 "Link": link,
             }
 
-            sheets_service.append_record(record)
+            updated_range = sheets_service.append_record(dict(record))
             logger.info(
                 "Logged record to Sheets for author=%s, category=%s",
                 author_name,
@@ -273,12 +342,46 @@ class SlackSocketListener:
             # Step 6: Calendar event creation if deadline exists
             if record["Deadline"]:
                 try:
-                    calendar_service.create_event(
-                        summary=data.get("notes") or record["Category"],
-                        description=f"From Slack message by {author_name}: {text}",
-                        date_str=record["Deadline"],
-                    )
-                    logger.info("Created Calendar event for deadline: %s", record["Deadline"])
+                    # Prune older incomplete / superseded events before creating new one
+                    try:
+                        calendar_service.prune_superseded_events(
+                            target_date_str=record["Deadline"],
+                            new_location=data.get("location") or "",
+                        )
+                    except Exception as p_exc:
+                        logger.debug("Event pruning skipped or failed: %s", p_exc)
+
+                    # Also delete previously active event for this conversation if present
+                    if conversation_id in self._active_events:
+                        prev_ev_id = self._active_events.get(conversation_id)
+                        if prev_ev_id:
+                            try:
+                                calendar_service.delete_event(prev_ev_id)
+                                logger.info(
+                                    "Deleted previous event %s for conversation %s",
+                                    prev_ev_id,
+                                    conversation_id,
+                                )
+                            except Exception as d_exc:
+                                logger.debug("Failed to delete previous event %s: %s", prev_ev_id, d_exc)
+
+                    cal_kwargs: dict[str, Any] = {
+                        "summary": data.get("notes") or record["Category"],
+                        "description": f"From Slack message by {author_name}: {text}",
+                        "date_str": record["Deadline"],
+                    }
+                    if data.get("location"):
+                        cal_kwargs["location"] = data["location"]
+
+                    cal_link = calendar_service.create_event(**cal_kwargs)
+                    if cal_link and isinstance(cal_link, str) and ("google.com" in cal_link or "calendar" in cal_link):
+                        record["Link"] = cal_link
+                        new_ev_id = calendar_service.extract_event_id_from_link(cal_link)
+                        if new_ev_id:
+                            self._active_events[conversation_id] = new_ev_id
+                        logger.info("Created Calendar event (%s) for deadline: %s", cal_link, record["Deadline"])
+                        if updated_range and isinstance(updated_range, str):
+                            sheets_service.update_record_link(updated_range, cal_link)
                 except Exception as exc:
                     logger.error("Failed to create Calendar event: %s", exc, exc_info=True)
 
