@@ -3,10 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN")
+SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "placeholder-gemini-key"
 
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
@@ -30,8 +31,8 @@ SHEET_HEADERS = [
     "Link",
 ]
 
-# Discord doesn't know which "subteam" someone is on -- fill this in with
-# your real staff list. Key = str(message.author) (their Discord username).
+# Slack doesn't know which "subteam" someone is on -- fill this in with
+# your real staff list. Key = author display name or username.
 # Anyone not listed falls back to "Unassigned".
 STAFF_SUBTEAM = {
     # "maria.e": "Open Source",

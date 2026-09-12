@@ -17,7 +17,7 @@ def dashboard(request: Request):
     records = get_all_records()
     records = list(reversed(records))  # most recent first
     return templates.TemplateResponse(
-        "index.html", {"request": request, "records": records}
+        request=request, name="index.html", context={"records": records}
     )
 
 
